@@ -23,8 +23,10 @@ public struct InterfaceParser: Sendable {
     /// - Returns: An array of ModifierInfo instances extracted from the file.
     /// - Throws: ParsingError if the file cannot be read or parsed.
     public func parse(filePath: String) throws -> [ModifierInfo] {
-        // TODO: Implement parsing logic
-        []
+        guard let source = try? String(contentsOfFile: filePath, encoding: .utf8) else {
+            throw ParsingError.fileNotFound(filePath)
+        }
+        return try parse(source: source)
     }
     
     /// Parses Swift source code and extracts modifier information.
@@ -33,7 +35,178 @@ public struct InterfaceParser: Sendable {
     /// - Returns: An array of ModifierInfo instances extracted from the source.
     /// - Throws: ParsingError if the source cannot be parsed.
     public func parse(source: String) throws -> [ModifierInfo] {
-        // TODO: Implement parsing logic
-        []
+        // Parse the source code into a syntax tree
+        let sourceFile = Parser.parse(source: source)
+        
+        var modifiers: [ModifierInfo] = []
+        
+        // Visit all extension declarations
+        for statement in sourceFile.statements {
+            if let extensionDecl = statement.item.as(ExtensionDeclSyntax.self) {
+                modifiers.append(contentsOf: parseExtension(extensionDecl))
+            }
+        }
+        
+        return modifiers
+    }
+    
+    // MARK: - Private Parsing Methods
+    
+    /// Parses an extension declaration and extracts View modifier methods.
+    private func parseExtension(_ ext: ExtensionDeclSyntax) -> [ModifierInfo] {
+        // Check if this is a View extension
+        guard isViewExtension(ext) else {
+            return []
+        }
+        
+        var modifiers: [ModifierInfo] = []
+        
+        // Extract all public functions from the extension
+        for member in ext.memberBlock.members {
+            if let funcDecl = member.decl.as(FunctionDeclSyntax.self) {
+                if let modifier = parseFunction(funcDecl) {
+                    modifiers.append(modifier)
+                }
+            }
+        }
+        
+        return modifiers
+    }
+    
+    /// Checks if an extension declaration is extending View.
+    private func isViewExtension(_ ext: ExtensionDeclSyntax) -> Bool {
+        let typeName = ext.extendedType.description.trimmingCharacters(in: .whitespaces)
+        return typeName.contains("View") && 
+               !typeName.contains("ViewModifier") &&
+               !typeName.contains("ViewDimensions")
+    }
+    
+    /// Parses a function declaration and creates a ModifierInfo if it's a valid modifier.
+    private func parseFunction(_ funcDecl: FunctionDeclSyntax) -> ModifierInfo? {
+        // Only extract public functions
+        guard isPublicFunction(funcDecl) else {
+            return nil
+        }
+        
+        // Extract function name
+        let name = funcDecl.name.text
+        
+        // Extract parameters
+        let parameters = extractParameters(from: funcDecl.signature.parameterClause)
+        
+        // Extract return type (should be "some View" for modifiers)
+        let returnType = extractReturnType(from: funcDecl.signature.returnClause)
+        
+        // Extract availability information
+        let availability = extractAvailability(from: funcDecl.attributes)
+        
+        // Extract documentation comments
+        let documentation = extractDocumentation(from: funcDecl.leadingTrivia)
+        
+        // Check if generic
+        let isGeneric = funcDecl.genericParameterClause != nil
+        
+        // Extract generic constraints
+        let genericConstraints = extractGenericConstraints(from: funcDecl.genericWhereClause)
+        
+        return ModifierInfo(
+            name: name,
+            parameters: parameters,
+            returnType: returnType,
+            availability: availability,
+            documentation: documentation,
+            isGeneric: isGeneric,
+            genericConstraints: genericConstraints
+        )
+    }
+    
+    /// Checks if a function is public.
+    private func isPublicFunction(_ funcDecl: FunctionDeclSyntax) -> Bool {
+        for modifier in funcDecl.modifiers {
+            if modifier.name.text == "public" {
+                return true
+            }
+        }
+        return false
+    }
+    
+    /// Extracts parameters from a parameter clause.
+    private func extractParameters(from clause: FunctionParameterClauseSyntax) -> [ModifierInfo.Parameter] {
+        clause.parameters.map { param in
+            let label = param.firstName.text == "_" ? nil : param.firstName.text
+            let name = param.secondName?.text ?? param.firstName.text
+            let type = param.type.description.trimmingCharacters(in: .whitespaces)
+            let hasDefaultValue = param.defaultValue != nil
+            let defaultValue = param.defaultValue?.value.description.trimmingCharacters(in: .whitespaces)
+            
+            return ModifierInfo.Parameter(
+                label: label,
+                name: name,
+                type: type,
+                hasDefaultValue: hasDefaultValue,
+                defaultValue: defaultValue
+            )
+        }
+    }
+    
+    /// Extracts return type from a return clause.
+    private func extractReturnType(from clause: ReturnClauseSyntax?) -> String {
+        guard let clause = clause else {
+            return "Void"
+        }
+        return clause.type.description.trimmingCharacters(in: .whitespaces)
+    }
+    
+    /// Extracts availability information from attributes.
+    private func extractAvailability(from attributes: AttributeListSyntax?) -> String? {
+        guard let attributes = attributes else {
+            return nil
+        }
+        
+        for attribute in attributes {
+            let attrText = attribute.description.trimmingCharacters(in: .whitespaces)
+            if attrText.hasPrefix("@available") {
+                return attrText
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Extracts documentation comments from trivia.
+    private func extractDocumentation(from trivia: Trivia?) -> String? {
+        guard let trivia = trivia else {
+            return nil
+        }
+        
+        var docLines: [String] = []
+        
+        for piece in trivia {
+            switch piece {
+            case .docLineComment(let text):
+                docLines.append(text)
+            case .docBlockComment(let text):
+                docLines.append(text)
+            default:
+                continue
+            }
+        }
+        
+        if docLines.isEmpty {
+            return nil
+        }
+        
+        return docLines.joined(separator: "\n")
+    }
+    
+    /// Extracts generic constraints from a where clause.
+    private func extractGenericConstraints(from clause: GenericWhereClauseSyntax?) -> [String] {
+        guard let clause = clause else {
+            return []
+        }
+        
+        return clause.requirements.map { req in
+            req.description.trimmingCharacters(in: .whitespaces)
+        }
     }
 }
