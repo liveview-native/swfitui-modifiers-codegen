@@ -1,0 +1,59 @@
+# Temporary scratch work (REQUIRED - see AGENTS.md)
+tmp/
+
+# AI planning documents (OPTIONAL - see AGENTS.md)
+# Uncomment if you want to exclude long-term planning docs:
+# history/
+
+# Swift build artifacts
+.build/
+.swiftpm/
+xcuserdata/
+*.xcworkspace
+!default.xcworkspace
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test artifacts
+*.test
+test-results/
+
+# Coverage reports
+coverage/
+*.profdata
+*.profraw
+
+# Documentation build artifacts
+docs/generated/
+
+# OS-specific
+Thumbs.db
+desktop.ini
+*.bak
+tmp/
+/tmp/
