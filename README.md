@@ -72,7 +72,53 @@ swift test
 ### Running the CLI in Development
 
 ```bash
-swift run modifier-swift --input <path> --output <path>
+# Basic usage
+swift run modifier-swift --input arm64e-apple-ios.swiftinterface --output ./Generated
+
+# With verbose output
+swift run modifier-swift --input arm64e-apple-ios.swiftinterface --output ./Generated --verbose
+
+# Clean output directory before generating
+swift run modifier-swift --input arm64e-apple-ios.swiftinterface --output ./Generated --clean
+
+# Disable categorization (all in one directory)
+swift run modifier-swift --input arm64e-apple-ios.swiftinterface --output ./Generated --no-categorize
+```
+
+### Real-World Example
+
+Processing the actual SwiftUI interface file:
+
+```bash
+$ modifier-swift --input arm64e-apple-ios.swiftinterface --output ./Generated --verbose --clean
+
+ModifierSwift v0.1.0
+Input: arm64e-apple-ios.swiftinterface
+Output: ./Generated
+
+📖 Parsing interface file...
+✓ Found 199 modifiers
+
+📊 Categorized into 7 groups:
+  • Animation: 2 modifiers
+  • Appearance: 14 modifiers
+  • Environment: 2 modifiers
+  • Interaction: 5 modifiers
+  • Layout: 11 modifiers
+  • Other: 161 modifiers
+  • Text: 4 modifiers
+
+🔨 Generating code...
+  ✓ Generated TextModifier.swift (4 modifiers)
+  ✓ Generated AppearanceModifier.swift (14 modifiers)
+  ✓ Generated OtherModifier.swift (161 modifiers)
+  ✓ Generated LayoutModifier.swift (11 modifiers)
+  ✓ Generated AnimationModifier.swift (2 modifiers)
+  ✓ Generated InteractionModifier.swift (5 modifiers)
+  ✓ Generated EnvironmentModifier.swift (2 modifiers)
+
+✅ Successfully generated 7 enum(s) with 199 total modifiers
+📁 Output: ./Generated
 ```
 
 ### Code Formatting
@@ -159,15 +205,16 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ## Status
 
-🚧 **Work in Progress** - This project is currently under active development.
+✅ **All Core Phases Complete!**
 
-Current Phase: **Phase 1 - Project Structure & Foundation** ✅
+Completed Phases:
+- ✅ Phase 1: Project Structure & Foundation
+- ✅ Phase 2: SwiftInterface Parser
+- ✅ Phase 3: Type System Analysis
+- ✅ Phase 4: Code Generator - Modifier Enums
+- ✅ Phase 5: Code Generator - SyntaxConvertible Extensions (merged with Phase 4)
+- ✅ Phase 6: File Output Manager
+- ✅ Phase 7: CLI Interface
+- ✅ Phase 8: Testing & Validation
 
-Upcoming Phases:
-- Phase 2: SwiftInterface Parser
-- Phase 3: Type System Analysis
-- Phase 4: Code Generator - Modifier Enums
-- Phase 5: Code Generator - SyntaxConvertible Extensions
-- Phase 6: File Output Manager
-- Phase 7: CLI Interface
-- Phase 8: Testing & Validation
+**Test Coverage:** 78 tests passing across all components
