@@ -11,7 +11,7 @@ struct ModifierSwiftCLI: ParsableCommand {
         version: "0.1.0"
     )
     
-    @Option(name: .shortAndLong, help: "Path to the .swiftinterface file to parse")
+    @Option(name: .shortAndLong, help: "Path to the .swiftinterface file or directory to parse")
     var input: String
     
     @Option(name: .shortAndLong, help: "Output directory for generated Swift files")
@@ -34,27 +34,57 @@ struct ModifierSwiftCLI: ParsableCommand {
             print()
         }
         
-        // Step 1: Parse the interface file
-        if verbose {
-            print("📖 Parsing interface file...")
-        }
-        
-        let parser = InterfaceParser()
-        let modifiers = try parser.parse(filePath: input)
+        // Step 1: Find all swiftinterface files
+        let interfaceFiles = try findSwiftInterfaceFiles(at: input)
         
         if verbose {
-            print("✓ Found \(modifiers.count) modifiers")
-            print()
+            if interfaceFiles.count == 1 {
+                print("📖 Parsing 1 interface file...")
+            } else {
+                print("📖 Parsing \(interfaceFiles.count) interface files...")
+                for file in interfaceFiles {
+                    print("  • \(URL(fileURLWithPath: file).lastPathComponent)")
+                }
+                print()
+            }
         }
         
-        guard !modifiers.isEmpty else {
-            print("⚠️  No modifiers found in input file")
+        guard !interfaceFiles.isEmpty else {
+            print("⚠️  No .swiftinterface files found in \(input)")
             return
         }
         
-        // Step 2: Group modifiers by name (all overloads together)
+        // Step 2: Parse all interface files and collect modifiers
+        let parser = InterfaceParser()
+        var allModifiers: [ModifierInfo] = []
+        
+        for file in interfaceFiles {
+            do {
+                let modifiers = try parser.parse(filePath: file)
+                allModifiers.append(contentsOf: modifiers)
+                if verbose {
+                    print("  ✓ \(URL(fileURLWithPath: file).lastPathComponent): \(modifiers.count) modifiers")
+                }
+            } catch {
+                print("  ⚠️  Failed to parse \(URL(fileURLWithPath: file).lastPathComponent): \(error)")
+            }
+        }
+        
+        if verbose {
+            print()
+            print("✓ Total modifiers found: \(allModifiers.count)")
+            print()
+        }
+        
+        guard !allModifiers.isEmpty else {
+            print("⚠️  No modifiers found in input files")
+            return
+        }
+        
+        // Step 3: Group modifiers by name (all overloads together)
+        // This will automatically merge modifiers from multiple files
         var modifiersByName: [String: [ModifierInfo]] = [:]
-        for modifier in modifiers {
+        for modifier in allModifiers {
             modifiersByName[modifier.name, default: []].append(modifier)
         }
         
@@ -71,7 +101,7 @@ struct ModifierSwiftCLI: ParsableCommand {
             print()
         }
         
-        // Step 3: Generate one file per modifier name
+        // Step 4: Generate one file per modifier name
         if verbose {
             print("🔨 Generating code...")
         }
@@ -107,7 +137,7 @@ struct ModifierSwiftCLI: ParsableCommand {
             print()
         }
         
-        // Step 4: Write output files
+        // Step 5: Write output files
         if verbose {
             print()
             print("💾 Writing files to \(output)...")
@@ -130,11 +160,50 @@ struct ModifierSwiftCLI: ParsableCommand {
             print()
         }
         
-        // Step 5: Summary
+        // Step 6: Summary
         if verbose {
             print()
         }
-        print("✅ Successfully generated \(totalGenerated) enum file(s) for \(modifiers.count) total modifier variants")
+        print("✅ Successfully generated \(totalGenerated) enum file(s) for \(allModifiers.count) total modifier variants")
+        if interfaceFiles.count > 1 {
+            print("📚 Processed \(interfaceFiles.count) interface files")
+        }
         print("📁 Output: \(output)")
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// Finds all .swiftinterface files at the given path.
+    /// If path is a file, returns it. If path is a directory, searches recursively.
+    private func findSwiftInterfaceFiles(at path: String) throws -> [String] {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        
+        guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory) else {
+            throw ValidationError("Path does not exist: \(path)")
+        }
+        
+        // If it's a file, check if it's a swiftinterface file
+        if !isDirectory.boolValue {
+            if path.hasSuffix(".swiftinterface") {
+                return [path]
+            } else {
+                throw ValidationError("File is not a .swiftinterface file: \(path)")
+            }
+        }
+        
+        // It's a directory - search for all .swiftinterface files
+        var interfaceFiles: [String] = []
+        
+        if let enumerator = fileManager.enumerator(atPath: path) {
+            for case let file as String in enumerator {
+                if file.hasSuffix(".swiftinterface") {
+                    let fullPath = (path as NSString).appendingPathComponent(file)
+                    interfaceFiles.append(fullPath)
+                }
+            }
+        }
+        
+        return interfaceFiles.sorted()
     }
 }
