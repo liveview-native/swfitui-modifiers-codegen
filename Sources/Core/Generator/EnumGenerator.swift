@@ -30,11 +30,14 @@ public struct EnumGenerator: Sendable {
         }
         
         var warnings: [String] = []
-        var generatedCases: [String] = []
+        
+        // Generate unique case names for each modifier variant
+        let caseNames = generateUniqueCaseNames(for: modifiers)
         
         // Generate enum cases
-        for modifier in modifiers {
-            let enumCase = try generateEnumCase(for: modifier)
+        var generatedCases: [String] = []
+        for (modifier, caseName) in zip(modifiers, caseNames) {
+            let enumCase = try generateEnumCase(for: modifier, caseName: caseName)
             generatedCases.append(enumCase)
         }
         
@@ -42,7 +45,8 @@ public struct EnumGenerator: Sendable {
         let sourceCode = buildEnumSource(
             enumName: enumName,
             cases: generatedCases,
-            modifiers: modifiers
+            modifiers: modifiers,
+            caseNames: caseNames
         )
         
         return GeneratedCode(
@@ -55,10 +59,62 @@ public struct EnumGenerator: Sendable {
     
     // MARK: - Private Generation Methods
     
-    /// Generates an enum case for a single modifier.
-    private func generateEnumCase(for modifier: ModifierInfo) throws -> String {
-        let caseName = makeCaseName(from: modifier.name)
+    /// Generates unique case names for all modifier variants.
+    /// If there's only one variant, uses the simple name.
+    /// If there are multiple variants, adds a suffix based on parameter types.
+    private func generateUniqueCaseNames(for modifiers: [ModifierInfo]) -> [String] {
+        let baseName = modifiers.first.map { makeCaseName(from: $0.name) } ?? "modifier"
         
+        // If only one variant, use the simple name
+        if modifiers.count == 1 {
+            return [baseName]
+        }
+        
+        // Multiple variants - need to make them unique
+        var caseNames: [String] = []
+        var usedNames: Set<String> = []
+        
+        for modifier in modifiers {
+            var candidateName = baseName
+            
+            // Add parameter type information to make it unique
+            if !modifier.parameters.isEmpty {
+                let typeSignature = modifier.parameters.map { param -> String in
+                    // Extract simple type name (e.g., "CGFloat" from "CoreFoundation.CGFloat")
+                    let components = param.type.split(separator: ".")
+                    let simpleType = components.last.map(String.init) ?? param.type
+                    
+                    // Remove generic parameters and cleanup
+                    let cleanType = simpleType
+                        .replacingOccurrences(of: "<", with: "")
+                        .replacingOccurrences(of: ">", with: "")
+                        .replacingOccurrences(of: "?", with: "Optional")
+                        .replacingOccurrences(of: ",", with: "")
+                        .replacingOccurrences(of: " ", with: "")
+                    
+                    return cleanType
+                }.joined()
+                
+                candidateName = baseName + "With" + typeSignature
+            }
+            
+            // If still not unique, add a numeric suffix
+            var finalName = candidateName
+            var counter = 1
+            while usedNames.contains(finalName) {
+                finalName = "\(candidateName)\(counter)"
+                counter += 1
+            }
+            
+            usedNames.insert(finalName)
+            caseNames.append(finalName)
+        }
+        
+        return caseNames
+    }
+    
+    /// Generates an enum case for a single modifier.
+    private func generateEnumCase(for modifier: ModifierInfo, caseName: String) throws -> String {
         if modifier.parameters.isEmpty {
             // Simple case with no associated values
             return "case \(caseName)"
@@ -81,7 +137,8 @@ public struct EnumGenerator: Sendable {
     private func buildEnumSource(
         enumName: String,
         cases: [String],
-        modifiers: [ModifierInfo]
+        modifiers: [ModifierInfo],
+        caseNames: [String]
     ) -> String {
         var lines: [String] = []
         
@@ -112,9 +169,8 @@ public struct EnumGenerator: Sendable {
         lines.append("    public func modifier(_ modifier: \(enumName)) -> some View {")
         lines.append("        switch modifier {")
         
-        // Generate switch cases
-        for modifier in modifiers {
-            let caseName = makeCaseName(from: modifier.name)
+        // Generate switch cases with the correct case names
+        for (modifier, caseName) in zip(modifiers, caseNames) {
             let switchCase = generateSwitchCase(for: modifier, caseName: caseName)
             lines.append("        \(switchCase)")
         }
